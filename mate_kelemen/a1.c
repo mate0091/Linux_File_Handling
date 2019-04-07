@@ -83,7 +83,117 @@ void list_dir(char* rel_path, int has_perm_write, int max_file_size)
 	}
 }
 
-void list_rec(char* rel_path, int has_perm_write, int max_file_size)
+int parse(char* rel_path, int check_section, int print_flag)
+{
+	char path[MAX_NAME_SIZE];
+	strcpy(path, rel_path);
+	
+	char abs_path[MAX_NAME_SIZE];
+	char root[MAX_NAME_SIZE];
+	
+	getcwd(root, sizeof(root));
+	
+	sprintf(abs_path, "%s/%s", root, path);
+	
+	int no_sect = 0;
+	int header_size = 0;
+	int version = 0;
+	
+	int fd = open(abs_path, O_RDONLY);
+	
+	if(fd < 0)
+	{
+		if(print_flag == 1) printf("ERROR\nInvalid file\n");
+		return -1;
+	}
+	
+	char mg[2];
+	strcpy(mg, "");
+	
+	//MAGIC
+	lseek(fd, 0, SEEK_SET);
+	
+	read(fd, &mg, 2);
+	
+	if(strncmp(mg, "p4", 2) != 0)
+	{
+		if(print_flag == 1) printf("ERROR\nwrong magic\n");
+		return -1;
+	}
+	
+	//HEADER_SIZE
+	read(fd, &header_size, 2);
+	
+	//VERSION
+	if(read(fd, &version, 2) > 0)
+	{
+		if(version < 124 || version > 201)
+		{
+			if(print_flag == 1) printf("ERROR\nwrong version\n");
+			return -1;
+		}
+	}
+	
+	//NO_SECTIONS
+	if(read(fd, &no_sect, 1) > 0)
+	{
+		if(no_sect < 8 || no_sect > 10)
+		{
+			if(print_flag == 1) printf("ERROR\nwrong sect_nr\n");
+			return -1;
+		}
+	}
+	
+	char sect_name[no_sect][14];
+	int sect_offset[no_sect];
+	int sect_size[no_sect];
+	int sect_type[no_sect];
+	
+	for(int i = 0; i < no_sect; i++)
+	{
+		for(int j = 0; j < 14; j++) sect_name[i][j] = '\0';
+	}
+	
+	for(int i = 0; i < no_sect; i++)
+	{
+		//read sect_name
+		read(fd, &sect_name[i], 13);
+		//read sect_type
+		read(fd, &sect_type[i], 4);
+		
+		if(sect_type[i] != 71 && sect_type[i] != 60)
+		{
+			if(print_flag == 1) printf("ERROR\nwrong sect_types\n");
+			return -1;
+		}
+		
+		//read sect_offset
+		read(fd, &sect_offset[i], 4);
+		//read sect_size
+		read(fd, &sect_size[i], 4);
+		
+		if(check_section == 1)
+		{
+			if(sect_size[i] > 907) return -1;
+		}
+	}
+	
+	if(print_flag == 1)
+	{
+		printf("SUCCESS\n");
+		printf("version=%d\n", version);
+		printf("nr_sections=%d\n", no_sect);
+	}
+	
+	for(int i = 0; i < no_sect; i++)
+	{
+		if(print_flag == 1) printf("section%d: %s %d %d\n", i + 1, sect_name[i], sect_type[i], sect_size[i]);
+	}
+	
+	return 0;
+}
+
+void list_rec(char* rel_path, int has_perm_write, int max_file_size, int sect_smaller)
 {
 	char path[MAX_NAME_SIZE];
 	strcpy(path, rel_path);
@@ -118,11 +228,13 @@ void list_rec(char* rel_path, int has_perm_write, int max_file_size)
 				if((inode.st_mode & S_IWUSR) == 0) flag = 0;
 			}
 			
+			if(sect_smaller == 1) flag = 0;
+			
 			if(S_ISDIR(inode.st_mode))
 			{
-				if(flag && max_file_size == -1) printf("%s\n", name);
+				if(flag && max_file_size == -1 && sect_smaller == 0) printf("%s\n", name);
 				
-				list_rec(name, has_perm_write, max_file_size);
+				list_rec(name, has_perm_write, max_file_size, sect_smaller);
 			}
 			
 			else if((S_ISREG(inode.st_mode) || S_ISLNK(inode.st_mode)) && flag)
@@ -138,7 +250,18 @@ void list_rec(char* rel_path, int has_perm_write, int max_file_size)
 						}
 					}
 					
-					else printf("%s\n", name);
+					else 
+					{
+						if(sect_smaller == 1)
+						{
+							//check section
+							if(parse(name, 1, 0) == 0)
+							{
+								printf("%s\n", name);
+							}
+						}
+						else printf("%s\n", name);
+					}
 				}
 				
 				else
@@ -153,7 +276,7 @@ void list_rec(char* rel_path, int has_perm_write, int max_file_size)
 	}
 }
 
-void list_rec_wrapper(char* rel_path, int f1, int f2)
+void list_rec_wrapper(char* rel_path, int f1, int f2, int f3)
 {
 	char path[MAX_NAME_SIZE];
 	strcpy(path, rel_path);
@@ -169,116 +292,16 @@ void list_rec_wrapper(char* rel_path, int f1, int f2)
 	
 	if(directory == 0)
 	{
-		printf("Invalid directory\n");
+		printf("ERROR\ninvalid directory path\n");
 		return;
 	}
 	
 	printf("SUCCESS\n");
-	list_rec(rel_path, f1, f2);
+	list_rec(rel_path, f1, f2, f3);
 	
 	closedir(directory);
 	
 	return;
-}
-
-void parse(char* rel_path)
-{
-	char path[MAX_NAME_SIZE];
-	strcpy(path, rel_path);
-	
-	char abs_path[MAX_NAME_SIZE];
-	char root[MAX_NAME_SIZE];
-	
-	getcwd(root, sizeof(root));
-	
-	sprintf(abs_path, "%s/%s", root, path);
-	
-	int no_sect = 0;
-	int header_size = 0;
-	int version = 0;
-	
-	int fd = open(abs_path, O_RDONLY);
-	
-	if(fd < 0)
-	{
-		printf("ERROR\nInvalid file\n");
-		return;
-	}
-	
-	char mg[2];
-	strcpy(mg, "");
-	
-	//MAGIC
-	lseek(fd, 0, SEEK_SET);
-	
-	read(fd, &mg, 2);
-	
-	if(strncmp(mg, "p4", 2) != 0)
-	{
-		printf("ERROR\nwrong magic\n");
-		return;
-	}
-	
-	//HEADER_SIZE
-	read(fd, &header_size, 2);
-	
-	//VERSION
-	if(read(fd, &version, 2) > 0)
-	{
-		if(version < 124 || version > 201)
-		{
-			printf("ERROR\nwrong version\n");
-			return;
-		}
-	}
-	
-	//NO_SECTIONS
-	if(read(fd, &no_sect, 1) > 0)
-	{
-		if(no_sect < 8 || no_sect > 10)
-		{
-			printf("ERROR\nwrong sect_nr\n");
-			return;
-		}
-	}
-	
-	char sect_name[no_sect][14];
-	int sect_offset[no_sect];
-	int sect_size[no_sect];
-	int sect_type[no_sect];
-	
-	for(int i = 0; i < no_sect; i++)
-	{
-		for(int j = 0; j < 14; j++) sect_name[i][j] = '\0';
-	}
-	
-	for(int i = 0; i < no_sect; i++)
-	{
-		//read sect_name
-		read(fd, &sect_name[i], 13);
-		//read sect_type
-		read(fd, &sect_type[i], 4);
-		
-		if(sect_type[i] != 71 && sect_type[i] != 60)
-		{
-			printf("ERROR\nwrong sect_types\n");
-			return;
-		}
-		
-		//read sect_offset
-		read(fd, &sect_offset[i], 4);
-		//read sect_size
-		read(fd, &sect_size[i], 4);
-	}
-	
-	printf("SUCCESS\n");
-	printf("version=%d\n", version);
-	printf("nr_sections=%d\n", no_sect);
-	
-	for(int i = 0; i < no_sect; i++)
-	{
-		printf("section%d: %s %d %d\n", i + 1, sect_name[i], sect_type[i], sect_size[i]);
-	}
 }
 
 void extract(char* rel_path, int sect_no, int line_no)
@@ -432,7 +455,7 @@ int main(int argc, char *argv[])
         	case 1:
         		if(rec_flag == 1)
         		{
-        			list_rec_wrapper(path, has_perm_w_flag, small_size);
+        			list_rec_wrapper(path, has_perm_w_flag, small_size, 0);
         		}
         		
         		else
@@ -441,10 +464,13 @@ int main(int argc, char *argv[])
         		}
         		break;
         	case 2:
-        		parse(path);
+        		parse(path, 0, 1);
         		break;
         	case 3:
         		extract(path, sect_no, line);
+        		break;
+        	case 4:
+        		list_rec_wrapper(path, 0, -1, 1);
         		break;
         	default:
         		break;
