@@ -7,20 +7,22 @@
 #include <dirent.h>
 #include <stdlib.h>
 
-#define MAX_NAME_SIZE 500
+#define MAX_NAME_SIZE 256
 
 void list_dir(char* rel_path, int has_perm_write, int max_file_size)
 {
 	char path[MAX_NAME_SIZE];
 	strcpy(path, rel_path);
 	
-	char abs_path[MAX_NAME_SIZE];
+	char abs_path[MAX_NAME_SIZE * 2 + 1];
 	char root[MAX_NAME_SIZE];
-	char name[MAX_NAME_SIZE];
+	char name[MAX_NAME_SIZE * 2];
 	
 	getcwd(root, sizeof(root));
 	
-	sprintf(abs_path, "%s/%s", root, path);
+	snprintf(abs_path, strlen(root) + strlen(path) + 2, "%s/%s", root, path);
+	
+	//printf("path=%s\n", abs_path);
 	
 	DIR* directory = opendir(abs_path);
 	struct dirent* dir_entry;
@@ -42,7 +44,7 @@ void list_dir(char* rel_path, int has_perm_write, int max_file_size)
 		{
 			int flag = 1;
 			
-			sprintf(name, "%s/%s", path, dir_entry->d_name);
+			snprintf(name, strlen(path) + strlen(dir_entry->d_name) + 2, "%s/%s", path, dir_entry->d_name);
 			
 			lstat(name, &inode);
 			
@@ -88,12 +90,12 @@ int parse(char* rel_path, int check_section, int print_flag)
 	char path[MAX_NAME_SIZE];
 	strcpy(path, rel_path);
 	
-	char abs_path[MAX_NAME_SIZE];
+	char abs_path[MAX_NAME_SIZE * 2 + 1];
 	char root[MAX_NAME_SIZE];
 	
 	getcwd(root, sizeof(root));
 	
-	sprintf(abs_path, "%s/%s", root, path);
+	snprintf(abs_path, strlen(root) + strlen(path) + 2, "%s/%s", root, path);
 	
 	int no_sect = 0;
 	int header_size = 0;
@@ -198,18 +200,18 @@ void list_rec(char* rel_path, int has_perm_write, int max_file_size, int sect_sm
 	char path[MAX_NAME_SIZE];
 	strcpy(path, rel_path);
 	
-	char abs_path[MAX_NAME_SIZE];
+	char abs_path[MAX_NAME_SIZE * 2 + 1];
 	char root[MAX_NAME_SIZE];
 	
 	getcwd(root, sizeof(root));
 	
-	sprintf(abs_path, "%s/%s", root, path);
+	snprintf(abs_path, strlen(root) + strlen(path) + 2, "%s/%s", root, path);
 	
 	DIR* directory = opendir(abs_path);
 	struct dirent* dir_entry;
 	struct stat inode;
 	
-	char name[MAX_NAME_SIZE];
+	char name[MAX_NAME_SIZE * 2];
 	
 	dir_entry = readdir(directory);
 	
@@ -219,7 +221,7 @@ void list_rec(char* rel_path, int has_perm_write, int max_file_size, int sect_sm
 		{
 			int flag = 1;
 			
-			sprintf(name, "%s/%s", path, dir_entry->d_name);
+			snprintf(name, strlen(path) + strlen(dir_entry->d_name) + 2, "%s/%s", path, dir_entry->d_name);
 			
 			lstat(name, &inode);
 			
@@ -281,12 +283,12 @@ void list_rec_wrapper(char* rel_path, int f1, int f2, int f3)
 	char path[MAX_NAME_SIZE];
 	strcpy(path, rel_path);
 	
-	char abs_path[MAX_NAME_SIZE];
+	char abs_path[MAX_NAME_SIZE * 2 + 1];
 	char root[MAX_NAME_SIZE];
 	
 	getcwd(root, sizeof(root));
 	
-	sprintf(abs_path, "%s/%s", root, path);
+	snprintf(abs_path, strlen(root) + strlen(path) + 2, "%s/%s", root, path);
 	
 	DIR* directory = opendir(abs_path);
 	
@@ -309,12 +311,12 @@ void extract(char* rel_path, int sect_no, int line_no)
 	char path[MAX_NAME_SIZE];
 	strcpy(path, rel_path);
 	
-	char abs_path[MAX_NAME_SIZE];
+	char abs_path[MAX_NAME_SIZE * 2 + 1];
 	char root[MAX_NAME_SIZE];
 	
 	getcwd(root, sizeof(root));
 	
-	sprintf(abs_path, "%s/%s", root, path);
+	snprintf(abs_path, strlen(root) + strlen(path) + 2, "%s/%s", root, path);
 	
 	int fd = open(abs_path, O_RDONLY);
 	if(fd == -1)
